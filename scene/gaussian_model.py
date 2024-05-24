@@ -71,19 +71,33 @@ class GaussianModel:
         # ====================== 新增内容 ======================
         # 对应论文中的Geometry Codebook
         # 应用R-VQ来归并那些尺度scale、旋转rot很相似的高斯，下面这个RVQ甚至还是现成的
-        # 只看这个类，RVQ似乎只对最后导出npz或ply的时候有用，过程中似乎没有办法降低高斯的内存占用？？？毕竟尺度和旋转这两个向量还在这里放着？？？
+        # 只看这个文件，RVQ似乎只对最后导出npz或ply的时候有用，过程中似乎没有办法降低高斯的内存占用？？？毕竟尺度和旋转这两个向量还在这里放着？？？
         # TODO：可以用相同的数据集，对比一下3dgs和compact 3dgs内存的占用情况！
-        self.vq_scale = ResidualVQ(dim=3, codebook_size=model.rvq_size, num_quantizers=model.rvq_num,
-                                   commitment_weight=0., kmeans_init=True, kmeans_iters=1, ema_update=False,
-                                   learnable_codebook=True,
-                                   in_place_codebook_optimizer=lambda *args, **kwargs: torch.optim.Adam(*args, **kwargs,
-                                                                                                        lr=0.0001)).cuda()
-        self.vq_rot = ResidualVQ(dim=4, codebook_size=model.rvq_size, num_quantizers=model.rvq_num,
-                                 commitment_weight=0., kmeans_init=True, kmeans_iters=1, ema_update=False,
+
+        # 初始化一个用于ResidualVQ（矢量量化）对象，并设置特定的超参数。
+        self.vq_scale = ResidualVQ(dim=3,  # 量化器输入的维度
+                                   codebook_size=model.rvq_size,  # codebook的大小，从模型的 rvq_size 中获取
+                                   num_quantizers=model.rvq_num,  # 量化器的数量，从模型的 rvq_num 中获取
+                                   commitment_weight=0.,  # 承诺损失的权重
+                                   kmeans_init=True,  # 布尔值，指示是否使用 k-means 初始化
+                                   kmeans_iters=1,  # 初始化的迭代次数
+                                   ema_update=False,  # 是否使用指数移动平均更新
+                                   learnable_codebook=True,  # 布尔值，指示coodbook是否可学习
+                                   in_place_codebook_optimizer=lambda *args, **kwargs:  # 创建学习率为 0.0001 的 Adam 优化器
+                                   torch.optim.Adam(*args, **kwargs, lr=0.0001)).cuda()  # 移动到 GPU 上
+        self.vq_rot = ResidualVQ(dim=4,
+                                 codebook_size=model.rvq_size,
+                                 num_quantizers=model.rvq_num,
+                                 commitment_weight=0.,
+                                 kmeans_init=True,
+                                 kmeans_iters=1,
+                                 ema_update=False,
                                  learnable_codebook=True,
-                                 in_place_codebook_optimizer=lambda *args, **kwargs: torch.optim.Adam(*args, **kwargs,
-                                                                                                      lr=0.0001)).cuda()
+                                 in_place_codebook_optimizer=lambda *args, **kwargs:
+                                 torch.optim.Adam(*args, **kwargs, lr=0.0001)).cuda()
+        # 通过取codebook大小的以2为底的对数，计算表示码书索引所需的比特数。这个参数只用在计算内存大小上了。
         self.rvq_bit = math.log2(model.rvq_size)
+        # 存储模型中的量化器数量，以备后用。这个参数也是只用在计算内存大小上了。
         self.rvq_num = model.rvq_num
 
         # 对应论文中的Compact View-dependent Color
