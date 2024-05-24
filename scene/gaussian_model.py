@@ -70,7 +70,9 @@ class GaussianModel:
 
         # ====================== 新增内容 ======================
         # 对应论文中的Geometry Codebook
-        # 应用R-VQ来归并那些尺度scale、旋转rot很相似的高斯
+        # 应用R-VQ来归并那些尺度scale、旋转rot很相似的高斯，下面这个RVQ甚至还是现成的
+        # 只看这个类，RVQ似乎只对最后导出npz或ply的时候有用，过程中似乎没有办法降低高斯的内存占用？？？毕竟尺度和旋转这两个向量还在这里放着？？？
+        # TODO：可以用相同的数据集，对比一下3dgs和compact 3dgs内存的占用情况！
         self.vq_scale = ResidualVQ(dim=3, codebook_size=model.rvq_size, num_quantizers=model.rvq_num,
                                    commitment_weight=0., kmeans_init=True, kmeans_iters=1, ema_update=False,
                                    learnable_codebook=True,
@@ -562,6 +564,9 @@ class GaussianModel:
         self.densify_and_clone(grads, max_grad, extent)
         self.densify_and_split(grads, max_grad, extent)
 
+        # 与3dgs相比，这里考虑了self._mask
+        # 对于每个3dgs，如果对应的sigmoid(mask)<=0.01 或 opacity<min_opacity就会被剪枝
+        # 这部分是在no_grad下进行的，对应了论文中的公式1
         prune_mask = torch.logical_or((torch.sigmoid(self._mask) <= 0.01).squeeze(),
                                       (self.get_opacity < min_opacity).squeeze())
         if max_screen_size:
@@ -571,7 +576,10 @@ class GaussianModel:
         self.prune_points(prune_mask)
         torch.cuda.empty_cache()
 
+    # 新增的函数
+    # 通过torch.sigmoid(self._mask) <= 0.01生成一个mask
     def mask_prune(self):
+        # 这部分是在no_grad下进行的，对应了论文中的公式1
         prune_mask = (torch.sigmoid(self._mask) <= 0.01).squeeze()
         self.prune_points(prune_mask)
         torch.cuda.empty_cache()
@@ -604,6 +612,7 @@ class GaussianModel:
         return total_mb, codec.encode(input_code_list), codec.get_code_table()
 
     def final_prune(self, compress=False):
+        # 这部分是在no_grad下进行的，对应了论文中的公式1
         prune_mask = (torch.sigmoid(self._mask) <= 0.01).squeeze()
         self.prune_points(prune_mask)
 

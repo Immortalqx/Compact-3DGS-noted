@@ -119,9 +119,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
             # 多出来的部分
             if iteration == opt.iterations:
+                # 完成迭代之后保存结果，保存的结果要进行一次最终的剪枝
                 storage = gaussians.final_prune(compress=comp)
                 with open(os.path.join(args.model_path, "storage"), 'w') as c:
                     c.write(storage)
+                # TODO 这里在做什么？
                 gaussians.precompute()
 
             # Log and save
@@ -129,7 +131,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                             testing_iterations, scene, render, (pipe, background))
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
-                scene.save(iteration, compress=comp, store=store_npz) # 多传入了两个参数
+                scene.save(iteration, compress=comp, store=store_npz)  # 多传入了两个参数
 
             # Densification
             if iteration < opt.densify_until_iter:
@@ -145,7 +147,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 if iteration % opt.opacity_reset_interval == 0 or (
                         dataset.white_background and iteration == opt.densify_from_iter):
                     gaussians.reset_opacity()
-            else:
+            else:  # 新增内容，间隔一定次数通过可学习的mask筛选一遍高斯
                 if iteration % opt.mask_prune_iter == 0:
                     gaussians.mask_prune()
 
